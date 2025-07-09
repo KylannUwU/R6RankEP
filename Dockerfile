@@ -17,7 +17,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app.py .
 
 # Exponer el puerto
-EXPOSE 5000
+EXPOSE $PORT
 
 # Comando para ejecutar la aplicación
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "app:app"]
+CMD ["python", "app.py"]
