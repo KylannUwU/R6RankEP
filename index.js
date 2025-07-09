@@ -21,4 +21,4 @@ async function getR6Rank(username) {
 }
 
 // Prueba
-getR6Rank("Pengu").then(console.log);
+getR6Rank("dedreviil12").then(console.log);
