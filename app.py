@@ -1,16 +1,19 @@
-from flask import Flask, request
+from flask import Flask
 import requests
 
 app = Flask(__name__)
 
-@app.route('/check/<username>/<platform>/<region>')
-def check_user(username, platform, region):
+@app.route('/check/<username>/<platform>')
+def check_user(username, platform):
     try:
-        resp = requests.get('https://r6stats.esportsapp.gg/api/v1/profile', params={
+        # API que estamos usando, sin región porque muchas APIs no la requieren
+        url = 'https://r6stats.esportsapp.gg/api/v1/profile'
+        params = {
             'username': username,
-            'platform': platform,
-            'region': region
-        })
+            'platform': platform
+        }
+        resp = requests.get(url, params=params)
+
         if resp.status_code == 200 and resp.json().get('userId'):
             return "Información recibida"
         else:
@@ -24,4 +27,6 @@ def home():
     return "Servidor Flask R6 funcionando"
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8080)
+    import os
+    port = int(os.environ.get('PORT', 8080))
+    app.run(host='0.0.0.0', port=port)
