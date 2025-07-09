@@ -22,13 +22,21 @@ app.get('/rank/:platform/:username', async (req, res) => {
     });
 
     const $ = cheerio.load(html);
+    
+    // DEBUG: Verifica si cargó correctamente la página
+    const title = $('title').text();
+    console.log(`✅ Título de la página: ${title}`);
 
+    // Cambia aquí si los selectores fallan
     const rank = $('[data-v-19b9b93b] .trn-defstat__name').first().text().trim();
     const mmr = $('[data-v-19b9b93b] .trn-defstat__value').first().text().trim();
     const image = $('img.trn-defstat__image').first().attr('src');
 
+    // DEBUG
+    console.log(`🔍 Rank: ${rank}, MMR: ${mmr}, Img: ${image}`);
+
     if (!rank) {
-      console.log('❌ No se pudo encontrar el rango.');
+      console.warn('⚠️ Rango no encontrado. Es posible que los selectores estén desactualizados.');
       return res.status(404).json({ error: 'Usuario no encontrado o sin rango' });
     }
 
@@ -39,9 +47,10 @@ app.get('/rank/:platform/:username', async (req, res) => {
       mmr,
       image: image?.startsWith('http') ? image : `https://r6.tracker.network${image}`
     });
+
   } catch (err) {
     console.error('🔥 Error al obtener los datos:', err.message);
-    res.status(500).json({ error: 'Error interno al obtener datos' });
+    res.status(500).json({ error: 'Error interno al obtener datos', message: err.message });
   }
 });
 
