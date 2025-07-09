@@ -1,40 +1,43 @@
 const express = require('express');
-const R6 = require('r6s-stats-api');
+const axios = require('axios');
+const cheerio = require('cheerio');
 
 const app = express();
 const port = process.env.PORT || 8080;
 
+app.get('/', (req, res) => {
+  res.send('API R6 funcionando 🎮');
+});
+
 app.get('/rank/:platform/:username', async (req, res) => {
   const { platform, username } = req.params;
+  const url = `https://r6.tracker.network/r6siege/profile/${platform}/${username}/overview`;
 
+  console.log(`📥 Buscando a: ${username} en ${platform}`);
   try {
-    const general = await R6.general(platform, username);
+    const { data: html } = await axios.get(url);
+    const $ = cheerio.load(html);
 
-    if (!general || !general.username) {
-      return res.status(404).json({ error: 'Usuario no encontrado' });
+    const rank = $('[data-v-19b9b93b] .trn-defstat__name').first().text().trim();
+    const mmr = $('[data-v-19b9b93b] .trn-defstat__value').first().text().trim();
+
+    if (!rank) {
+      console.log('❌ No se pudo encontrar el rango.');
+      return res.status(404).json({ error: 'Usuario no encontrado o sin rango' });
     }
 
     res.json({
-      username: general.username,
-      level: general.level,
-      rank_name: general.ranked ? general.ranked.rank_name : 'Unranked',
-      rank_points: general.ranked ? general.ranked.rank_points : 0,
-      wins: general.ranked ? general.ranked.wins : 0,
-      losses: general.ranked ? general.ranked.losses : 0,
-      kills: general.ranked ? general.ranked.kills : 0,
-      deaths: general.ranked ? general.ranked.deaths : 0,
-      rank_image: general.ranked ? general.ranked.rankImage : null,
+      username,
+      platform,
+      rank,
+      mmr
     });
-  } catch (error) {
-    console.error('Error al obtener datos:', error);
-    res.status(500).json({ error: 'Error al obtener datos' });
+  } catch (err) {
+    console.error('🔥 Error al obtener los datos:', err.message);
+    res.status(500).json({ error: 'Error interno al obtener datos' });
   }
 });
 
-app.get('/', (req, res) => {
-  res.send('API R6 Rank funcionando');
-});
-
 app.listen(port, () => {
-  console.log(`Servidor activo en puerto ${port}`);
+  console.log(`🚀 Servidor activo en puerto ${port}`);
 });
