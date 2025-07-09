@@ -15,11 +15,17 @@ app.get('/rank/:platform/:username', async (req, res) => {
 
   console.log(`📥 Buscando a: ${username} en ${platform}`);
   try {
-    const { data: html } = await axios.get(url);
+    const { data: html } = await axios.get(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36'
+      }
+    });
+
     const $ = cheerio.load(html);
 
     const rank = $('[data-v-19b9b93b] .trn-defstat__name').first().text().trim();
     const mmr = $('[data-v-19b9b93b] .trn-defstat__value').first().text().trim();
+    const image = $('img.trn-defstat__image').first().attr('src');
 
     if (!rank) {
       console.log('❌ No se pudo encontrar el rango.');
@@ -30,7 +36,8 @@ app.get('/rank/:platform/:username', async (req, res) => {
       username,
       platform,
       rank,
-      mmr
+      mmr,
+      image: image?.startsWith('http') ? image : `https://r6.tracker.network${image}`
     });
   } catch (err) {
     console.error('🔥 Error al obtener los datos:', err.message);
