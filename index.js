@@ -1,59 +1,44 @@
-const express = require('express');
-const axios = require('axios');
-const cheerio = require('cheerio');
+import express from "express";
+import axios from "axios";
+import cheerio from "cheerio";
 
 const app = express();
-const port = process.env.PORT || 8080;
+const PORT = process.env.PORT || 8080;
 
-app.get('/', (req, res) => {
-  res.send('API R6 funcionando 🎮');
-});
-
-app.get('/rank/:platform/:username', async (req, res) => {
+app.get("/rank/:platform/:username", async (req, res) => {
   const { platform, username } = req.params;
+  console.log(`📥 Buscando a: ${username} en ${platform}`);
+
   const url = `https://r6.tracker.network/r6siege/profile/${platform}/${username}/overview`;
 
-  console.log(`📥 Buscando a: ${username} en ${platform}`);
   try {
-    const { data: html } = await axios.get(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36'
-      }
-    });
+    const { data } = await axios.get(url);
+    const $ = cheerio.load(data);
 
-    const $ = cheerio.load(html);
-    
-    // DEBUG: Verifica si cargó correctamente la página
-    const title = $('title').text();
-    console.log(`✅ Título de la página: ${title}`);
+    // Buscar el texto del rango
+    const rankElement = $('[data-v-6b3f4a85]:contains("Ranked")').first().next();
+    const rankText = rankElement.text().trim();
 
-    // Cambia aquí si los selectores fallan
-    const rank = $('[data-v-19b9b93b] .trn-defstat__name').first().text().trim();
-    const mmr = $('[data-v-19b9b93b] .trn-defstat__value').first().text().trim();
-    const image = $('img.trn-defstat__image').first().attr('src');
-
-    // DEBUG
-    console.log(`🔍 Rank: ${rank}, MMR: ${mmr}, Img: ${image}`);
-
-    if (!rank) {
-      console.warn('⚠️ Rango no encontrado. Es posible que los selectores estén desactualizados.');
-      return res.status(404).json({ error: 'Usuario no encontrado o sin rango' });
+    if (!rankText) {
+      return res.status(404).json({ error: "No se pudo encontrar el rango." });
     }
 
-    res.json({
+    return res.json({
       username,
       platform,
-      rank,
-      mmr,
-      image: image?.startsWith('http') ? image : `https://r6.tracker.network${image}`
+      rank: rankText,
     });
 
-  } catch (err) {
-    console.error('🔥 Error al obtener los datos:', err.message);
-    res.status(500).json({ error: 'Error interno al obtener datos', message: err.message });
+  } catch (error) {
+    console.error("🔥 Error al obtener los datos:", error.message);
+    return res.status(500).json({ error: "Error interno del servidor." });
   }
 });
 
-app.listen(port, () => {
-  console.log(`🚀 Servidor activo en puerto ${port}`);
+app.get("/", (req, res) => {
+  res.send("✅ API de rango de Rainbow Six Siege activa.");
+});
+
+app.listen(PORT, () => {
+  console.log(`🚀 Servidor escuchando en el puerto ${PORT}`);
 });
