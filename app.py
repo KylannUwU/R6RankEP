@@ -3,6 +3,7 @@ import requests
 from bs4 import BeautifulSoup
 import time
 import logging
+import os
 
 app = Flask(__name__)
 
