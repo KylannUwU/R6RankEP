@@ -1,8 +1,8 @@
 {
   "name": "r6rank-api",
   "version": "1.0.0",
+  "description": "API para obtener el rango de R6 desde r6.tracker.network",
   "main": "index.js",
-  "type": "module",
   "scripts": {
     "start": "node index.js"
   },
