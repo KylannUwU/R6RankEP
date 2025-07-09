@@ -1,42 +1,24 @@
-const express = require("express");
-const axios = require("axios");
+import axios from "axios";
+import cheerio from "cheerio";
 
-const app = express();
-const PORT = process.env.PORT || 8080;
-
-app.get("/", (req, res) => {
-  res.send("API de R6 con SwiftCODA");
-});
-
-app.get("/rank/:platform/:username", async (req, res) => {
-  const { platform, username } = req.params;
-
+async function getR6Rank(username) {
   try {
-    const response = await axios.get(`https://api.r6stats.com/api/v1/players/${username}?platform=${platform}`);
-    const data = response.data;
+    const url = `https://r6.tracker.network/r6siege/profile/ubi/${username}/overview`;
+    const { data } = await axios.get(url);
 
-    if (!data || !data.player) {
-      return res.status(404).json({ error: "Jugador no encontrado" });
+    const $ = cheerio.load(data);
+
+    // Selector para el span del rango
+    const rank = $('div.inline-flex.gap-1.overflow-hidden.text-14.text-secondary > span.truncate').text().trim();
+
+    if (!rank) {
+      return { error: "No se encontró el rango" };
     }
-
-    const { rank, level, mmr, kd, wins, losses } = data.player.stats.general;
-
-    res.json({
-      username,
-      platform,
-      level,
-      rank,
-      mmr,
-      kd,
-      wins,
-      losses,
-    });
+    return { username, rank };
   } catch (error) {
-    console.error("❌ Error:", error.message);
-    res.status(500).json({ error: "Error al consultar los datos" });
+    return { error: error.message };
   }
-});
+}
 
-app.listen(PORT, () => {
-  console.log(`🚀 Servidor activo en el puerto ${PORT}`);
-});
+// Prueba
+getR6Rank("Pengu").then(console.log);
