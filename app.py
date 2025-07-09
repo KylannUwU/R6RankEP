@@ -22,8 +22,8 @@ def get_r6_rank(username):
         # Headers más realistas para evitar detección
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
-            'Accept-Language': 'es-ES,es;q=0.9,en;q=0.8',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7',
+            'Accept-Language': 'en-US,en;q=0.9',
             'Accept-Encoding': 'gzip, deflate, br',
             'Connection': 'keep-alive',
             'Upgrade-Insecure-Requests': '1',
@@ -33,17 +33,45 @@ def get_r6_rank(username):
             'Sec-Fetch-User': '?1',
             'sec-ch-ua': '"Not_A Brand";v="8", "Chromium";v="120", "Google Chrome";v="120"',
             'sec-ch-ua-mobile': '?0',
-            'sec-ch-ua-platform': '"Windows"'
+            'sec-ch-ua-platform': '"Windows"',
+            'Cache-Control': 'max-age=0',
+            'Referer': 'https://r6.tracker.network/',
+            'Origin': 'https://r6.tracker.network'
         }
         
         # Crear sesión para mantener cookies
         session = requests.Session()
         session.headers.update(headers)
         
-        # Realizar la petición
+        # Intentar primero visitar la página principal para obtener cookies
+        try:
+            main_page = session.get('https://r6.tracker.network/', timeout=10)
+            logger.info(f"Main page status: {main_page.status_code}")
+            time.sleep(2)  # Esperar un poco entre peticiones
+        except:
+            pass
+        
+        # Ahora intentar obtener el perfil
         response = session.get(url, timeout=15)
         
         logger.info(f"Status code: {response.status_code}")
+        
+        if response.status_code == 403:
+            # Si está bloqueado, intentar con diferentes estrategias
+            logger.warning("Acceso bloqueado (403), intentando estrategias alternativas...")
+            
+            # Estrategia 1: Cambiar User-Agent a uno móvil
+            mobile_headers = headers.copy()
+            mobile_headers['User-Agent'] = 'Mozilla/5.0 (iPhone; CPU iPhone OS 16_6 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.6 Mobile/15E148 Safari/604.1'
+            mobile_headers['sec-ch-ua-mobile'] = '?1'
+            
+            session.headers.update(mobile_headers)
+            response = session.get(url, timeout=15)
+            logger.info(f"Mobile attempt status: {response.status_code}")
+            
+            # Estrategia 2: Si sigue bloqueado, usar un proxy o simplemente devolver un mensaje
+            if response.status_code == 403:
+                return {"error": "R6 Tracker está bloqueando las peticiones. Intenta más tarde.", "rank": None}
         
         if response.status_code == 404:
             return {"error": "Usuario no encontrado", "rank": None}
@@ -71,7 +99,9 @@ def get_r6_rank(username):
             '.segment-stat__value',
             '.stat-value',
             '[data-testid*="rank"]',
-            '[class*="current-rank"]'
+            '[class*="current-rank"]',
+            '.trn-text--dimmed',
+            '.trn-defstat__name'
         ]
         
         for selector in possible_selectors:
@@ -229,6 +259,28 @@ def debug_rank(username):
                 })
         
         return jsonify(debug_info)
+        
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/test-connection')
+def test_connection():
+    """
+    Endpoint para probar la conexión a R6 Tracker
+    """
+    try:
+        # Intentar acceder a la página principal
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        }
+        
+        response = requests.get('https://r6.tracker.network/', headers=headers, timeout=10)
+        
+        return jsonify({
+            "main_page_status": response.status_code,
+            "main_page_length": len(response.content),
+            "message": "Conexión exitosa" if response.status_code == 200 else "Problemas de conexión"
+        })
         
     except Exception as e:
         return jsonify({"error": str(e)}), 500
