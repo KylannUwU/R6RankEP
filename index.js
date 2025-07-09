@@ -5,14 +5,13 @@ import * as cheerio from "cheerio";
 const app = express();
 const PORT = process.env.PORT || 8080;
 
-app.get("/rank/:platform/:username", async (req, res) => {
-  const { platform, username } = req.params;
+app.get("/rank/:username", async (req, res) => {
+  const { username } = req.params;
 
-  // Solo 'ubi' (uplay/pc) está soportado por el scraping
   const profileUrl = `https://r6.tracker.network/r6siege/profile/ubi/${username}/overview`;
 
   try {
-    console.log(`📥 Buscando a: ${username} en ${platform}`);
+    console.log(`📥 Buscando a: ${username}`);
 
     const response = await axios.get(profileUrl, {
       headers: {
@@ -30,7 +29,7 @@ app.get("/rank/:platform/:username", async (req, res) => {
     }
 
     console.log(`✅ Rango encontrado: ${rank}`);
-    res.json({ username, platform, rank });
+    res.json({ username, rank });
 
   } catch (error) {
     console.error("🔥 Error al obtener los datos:", error.message);
