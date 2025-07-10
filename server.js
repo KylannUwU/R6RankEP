@@ -49,29 +49,44 @@ const rankMap = {
   31: "Champion"
 };
 
-// Función para obtener el rango usando la API no oficial de R6
+// Función para obtener el rango usando múltiples APIs
 async function getR6Rank(username) {
   try {
-    // Usamos la API pública de R6Stats
-    const response = await axios.get(`https://r6stats.com/api/player-search/${username}/pc`);
+    // Primero intentamos con R6Stats
+    console.log(`Searching for player: ${username}`);
     
-    if (response.data && response.data.length > 0) {
-      const player = response.data[0];
+    const searchResponse = await axios.get(`https://r6stats.com/api/player-search/${username}/pc`, {
+      timeout: 10000,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    });
+    
+    console.log('Search response:', searchResponse.data);
+    
+    if (searchResponse.data && searchResponse.data.length > 0) {
+      const player = searchResponse.data[0];
       const playerId = player.id;
       
+      console.log(`Found player: ${player.username} (ID: ${playerId})`);
+      
       // Obtenemos las estadísticas del jugador
-      const statsResponse = await axios.get(`https://r6stats.com/api/player/${playerId}`);
+      const statsResponse = await axios.get(`https://r6stats.com/api/player/${playerId}`, {
+        timeout: 10000,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+      });
+      
+      console.log('Stats response status:', statsResponse.status);
       
       if (statsResponse.data && statsResponse.data.player) {
-        const seasonStats = statsResponse.data.player.seasons;
+        const playerData = statsResponse.data.player;
         
-        // Obtenemos la temporada más reciente
-        const latestSeason = Object.keys(seasonStats).pop();
-        const currentSeason = seasonStats[latestSeason];
-        
-        if (currentSeason && currentSeason.ranked) {
-          const rankId = currentSeason.ranked.rank;
-          const mmr = currentSeason.ranked.mmr;
+        // Verificamos si tiene datos de ranked
+        if (playerData.ranked && playerData.ranked.rank !== undefined) {
+          const rankId = playerData.ranked.rank;
+          const mmr = playerData.ranked.mmr || 0;
           const rankName = rankMap[rankId] || "Unknown";
           
           return {
@@ -79,17 +94,88 @@ async function getR6Rank(username) {
             username: player.username,
             rank: rankName,
             mmr: mmr,
-            season: latestSeason
+            source: 'r6stats'
           };
+        }
+        
+        // Si no tiene datos de ranked, intentamos con seasons
+        if (playerData.seasons) {
+          const seasonKeys = Object.keys(playerData.seasons);
+          const latestSeason = seasonKeys[seasonKeys.length - 1];
+          const currentSeason = playerData.seasons[latestSeason];
+          
+          if (currentSeason && currentSeason.ranked) {
+            const rankId = currentSeason.ranked.rank;
+            const mmr = currentSeason.ranked.mmr || 0;
+            const rankName = rankMap[rankId] || "Unknown";
+            
+            return {
+              success: true,
+              username: player.username,
+              rank: rankName,
+              mmr: mmr,
+              season: latestSeason,
+              source: 'r6stats'
+            };
+          }
         }
       }
     }
     
-    return { success: false, message: "Player not found or no ranked data available" };
+    // Si R6Stats no funciona, intentamos con API alternativa
+    return await getR6RankAlternative(username);
     
   } catch (error) {
-    console.error('Error fetching R6 stats:', error.message);
-    return { success: false, message: "Error fetching player data" };
+    console.error('Error with R6Stats:', error.message);
+    // Intentamos con API alternativa
+    return await getR6RankAlternative(username);
+  }
+}
+
+// Función alternativa usando otra API
+async function getR6RankAlternative(username) {
+  try {
+    console.log(`Trying alternative API for: ${username}`);
+    
+    // Usamos la API de R6Tab como backup
+    const response = await axios.get(`https://r6tab.com/api/search.php?platform=uplay&search=${username}`, {
+      timeout: 10000,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    });
+    
+    if (response.data && response.data.results && response.data.results.length > 0) {
+      const player = response.data.results[0];
+      
+      // Obtenemos datos detallados del jugador
+      const detailResponse = await axios.get(`https://r6tab.com/api/player.php?p_id=${player.p_id}`, {
+        timeout: 10000,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+        }
+      });
+      
+      if (detailResponse.data && detailResponse.data.ranked) {
+        const rankId = detailResponse.data.ranked.rank;
+        const mmr = detailResponse.data.ranked.mmr || 0;
+        const rankName = rankMap[rankId] || "Unknown";
+        
+        return {
+          success: true,
+          username: player.p_name,
+          rank: rankName,
+          mmr: mmr,
+          source: 'r6tab'
+        };
+      }
+    }
+    
+    return { success: false, message: "Player not found in any database" };
+    
+  } catch (error) {
+    console.error('Error with alternative API:', error.message);
+    return { success: false, message: "All APIs failed" };
   }
 }
 
@@ -137,18 +223,53 @@ app.get('/se/:username', async (req, res) => {
     return res.status(400).send("Username required");
   }
   
+  console.log(`StreamElements request for: ${username}`);
+  
   try {
     const result = await getR6Rank(username);
     
     if (result.success) {
       // Respuesta simple para StreamElements
+      console.log(`Success: ${username} -> ${result.rank}`);
       res.send(`${result.rank}`);
     } else {
+      console.log(`Failed: ${username} -> ${result.message}`);
       res.status(404).send("Player not found");
     }
     
   } catch (error) {
+    console.error('Unexpected error:', error);
     res.status(500).send("Error fetching data");
+  }
+});
+
+// Endpoint de debug para probar manualmente
+app.get('/debug/:username', async (req, res) => {
+  const { username } = req.params;
+  
+  if (!username) {
+    return res.status(400).json({ error: "Username required" });
+  }
+  
+  console.log(`Debug request for: ${username}`);
+  
+  try {
+    const result = await getR6Rank(username);
+    
+    res.json({
+      username: username,
+      timestamp: new Date().toISOString(),
+      result: result,
+      debug: true
+    });
+    
+  } catch (error) {
+    res.status(500).json({
+      username: username,
+      timestamp: new Date().toISOString(),
+      error: error.message,
+      debug: true
+    });
   }
 });
 
@@ -156,9 +277,16 @@ app.get('/se/:username', async (req, res) => {
 app.get('/', (req, res) => {
   res.json({ 
     message: "R6 Siege Rank API",
+    status: "online",
+    timestamp: new Date().toISOString(),
     endpoints: {
       "/rank/:username": "Get detailed rank info",
-      "/se/:username": "Get simple rank for StreamElements"
+      "/se/:username": "Get simple rank for StreamElements",
+      "/debug/:username": "Debug endpoint with full response"
+    },
+    example: {
+      streamElements: "https://r6rank.up.railway.app/se/dedreviil12",
+      debug: "https://r6rank.up.railway.app/debug/dedreviil12"
     }
   });
 });
